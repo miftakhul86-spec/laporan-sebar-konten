@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Laporan Sebar Konten</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+<style>
+  body { background: #f4f6f9; padding: 16px; }
+  .card { border: none; box-shadow: 0 1px 3px rgba(0,0,0,.08); margin-bottom: 16px; }
+  .section-title { font-size: 1rem; font-weight: 700; color: #0d6efd; margin-bottom: 12px; }
+  .form-check-label { font-size: .9rem; }
+  .table-sm td, .table-sm th { vertical-align: middle; font-size: .8rem; }
+  .name-chip { display: inline-flex; align-items: center; gap: 4px; background: #e7f1ff; color: #0d6efd; padding: 3px 10px; border-radius: 20px; font-size: .85rem; margin: 2px; }
+  .name-chip button { background: none; border: none; color: #dc3545; font-weight: bold; padding: 0 0 0 4px; font-size: .9rem; line-height: 1; }
+  .hidden { display: none !important; }
+  .durasi-grid, .alasan-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px; }
+  .durasi-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+  .admin-badge { background: #6f42c1; }
+  .import-card { border-left: 4px solid #6f42c1; }
+
+  /* ==== MODE SWITCH ==== */
+  body:not(.admin-mode) .admin-only { display: none !important; }
+  body.admin-mode .normal-only { display: none !important; }
+
+  /* ==== TOAST ==== */
+  .toast-notif {
+    background: #198754; color: white;
+    padding: 12px 20px; border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,.18);
+    font-size: .9rem;
+    min-width: 240px; max-width: 400px;
+    display: flex; align-items: center; gap: 8px;
+    animation: slideIn .3s ease-out;
+  }
+  .toast-notif.error { background: #dc3545; }
+  .toast-notif.info { background: #0d6efd; }
+  .toast-notif.warning { background: #f59e0b; }
+  .toast-notif.fade-out { animation: slideOut .3s ease-in forwards; }
+  @keyframes slideIn { from { transform: translateX(420px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  @keyframes slideOut { to { transform: translateX(420px); opacity: 0; } }
+</style>
+</head>
+<body>
+
+<div id="toastContainer" style="position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 8px;"></div>
+
+<div class="container-fluid" style="max-width: 1200px">
+
+  <!-- Header -->
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div>
+      <h1 class="h4 mb-1">📋 Laporan Sebar Konten <span class="badge admin-badge admin-only">ADMIN</span></h1>
+      <div class="text-muted small">Maulid 1448 H · MARGOPADANG · BOJONEGORO RAYA</div>
+    </div>
+    <div class="d-flex gap-2 align-items-center">
+      <span class="badge bg-primary fs-6" id="countBadge">0 data</span>
+      <button class="btn btn-sm btn-outline-secondary" onclick="toggleAdmin()">
+        <span id="adminToggleLabel">🔑 Admin</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Section 1: Import Nama (ADMIN ONLY) -->
+  <div class="card admin-only">
+    <div class="card-body">
+      <div class="section-title">1. Daftar Nama Pemuda</div>
+      <div class="row g-2">
+        <div class="col-md-8">
+          <textarea id="namesInput" class="form-control" rows="4"
+            placeholder="Paste nama, satu per baris...&#10;Contoh:&#10;HUDA&#10;ROKHIM&#10;SUNOTO"></textarea>
+        </div>
+        <div class="col-md-4 d-flex flex-column gap-2">
+          <button class="btn btn-primary w-100" onclick="importNames()">📥 Muat &amp; Simpan Nama</button>
+          <button class="btn btn-outline-danger w-100" onclick="clearNames()">🗑️ Hapus Semua Nama</button>
+        </div>
+      </div>
+      <div id="namesList" class="mt-3"></div>
+    </div>
+  </div>
+
+  <!-- Section 2: Form Input -->
+  <div class="card">
+    <div class="card-body">
+      <div class="section-title"><span class="admin-only">2. </span>Input Data Penyebaran Konten</div>
+      <form id="dataForm" onsubmit="saveRecord(event)">
+        <input type="hidden" id="editId">
+
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label fw-bold">Nama</label>
+            <div class="admin-only">
+              <select class="form-select" id="namaSelect">
+                <option value="">— Pilih Nama —</option>
+              </select>
+            </div>
+            <div class="normal-only">
+              <input type="text" class="form-control" id="namaInput" placeholder="Ketik nama..." autocomplete="off">
+            </div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-bold">Status</label>
+            <div class="d-flex gap-3">
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="status" id="statusK" value="K" required>
+                <label class="form-check-label" for="statusK"><b>K</b> — Karyawan</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="status" id="statusP" value="P">
+                <label class="form-check-label" for="statusP"><b>P</b> — Pelajar</label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row g-3 mt-1">
+          <div class="col-12">
+            <label class="form-label fw-bold">Apakah Menonton?</label>
+            <div class="d-flex gap-3">
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="menonton" id="menontonYa" value="ya" required onchange="toggleMenonton()">
+                <label class="form-check-label" for="menontonYa">✅ Ya, Menonton</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="menonton" id="menontonTidak" value="tidak" onchange="toggleMenonton()">
+                <label class="form-check-label" for="menontonTidak">❌ Tidak Menonton</label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="durasiSection" class="mt-2 hidden">
+          <label class="form-label fw-bold">Durasi Menonton</label>
+          <div class="durasi-grid">
+            <div class="form-check"><input class="form-check-input" type="radio" name="durasi" id="d1" value="<1/2"><label class="form-check-label" for="d1">&lt; 1/2 video</label></div>
+            <div class="form-check"><input class="form-check-input" type="radio" name="durasi" id="d2" value="tdkSelesai"><label class="form-check-label" for="d2">Tdk sesai tp lebih dr 1/2</label></div>
+            <div class="form-check"><input class="form-check-input" type="radio" name="durasi" id="d3" value="selesai"><label class="form-check-label" for="d3">Sampai Selesai</label></div>
+          </div>
+        </div>
+
+        <div id="alasanTidakMenontonSection" class="mt-2 hidden">
+          <label class="form-label fw-bold">Alasan Tidak Menonton</label>
+          <div class="alasan-grid">
+            <div class="form-check"><input class="form-check-input" type="radio" name="alasanTidakMenonton" id="atm1" value="tdkInfo"><label class="form-check-label" for="atm1">Tidak Dapat Info Link Video</label></div>
+            <div class="form-check"><input class="form-check-input" type="radio" name="alasanTidakMenonton" id="atm2" value="noGadget"><label class="form-check-label" for="atm2">Tidak Ada Gadget/Data</label></div>
+            <div class="form-check"><input class="form-check-input" type="radio" name="alasanTidakMenonton" id="atm3" value="kegiatan000"><label class="form-check-label" for="atm3">Ada Kegiatan 000 Lainnya</label></div>
+            <div class="form-check"><input class="form-check-input" type="radio" name="alasanTidakMenonton" id="atm4" value="kegiatanPribadi"><label class="form-check-label" for="atm4">Ada Kegiatan Pribadi/Keluarga</label></div>
+            <div class="form-check"><input class="form-check-input" type="radio" name="alasanTidakMenonton" id="atm5" value="bekerja"><label class="form-check-label" for="atm5">Bekerja</label></div>
+            <div class="form-check"><input class="form-check-input" type="radio" name="alasanTidakMenonton" id="atm6" value="malas"><label class="form-check-label" for="atm6">Malas</label></div>
+            <div class="form-check"><input class="form-check-input" type="radio" name="alasanTidakMenonton" id="atm7" value="tidakMerrespons"><label class="form-check-label" for="atm7">Tidak Merespons</label></div>
+          </div>
+        </div>
+
+        <div class="row g-3 mt-1">
+          <div class="col-12">
+            <label class="form-label fw-bold">Apakah Melakukan Share?</label>
+            <div class="d-flex gap-3">
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="share" id="shareYa" value="ya" required onchange="toggleShare()">
+                <label class="form-check-label" for="shareYa">✅ Ya, Share</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="share" id="shareTidak" value="tidak" onchange="toggleShare()">
+                <label class="form-check-label" for="shareTidak">❌ Tidak Share</label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="shareYaSection" class="mt-2 hidden">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label fw-bold">Jumlah Kontakan yang Dishare</label>
+              <input type="number" class="form-control" id="jumlahKontakan" min="0" placeholder="Contoh: 25">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-bold">Jumlah Medsos</label>
+              <input type="number" class="form-control" id="jumlahMedsos" min="0" placeholder="Contoh: 2">
+            </div>
+          </div>
+        </div>
+
+        <div id="shareTidakSection" class="mt-2 hidden">
+          <label class="form-label fw-bold">Alasan Tidak Share</label>
+          <div class="alasan-grid">
+            <div class="form-check"><input class="form-check-input" type="radio" name="alasanTidakShare" id="ats1" value="tdkInfo"><label class="form-check-label" for="ats1">Tidak Dapat Info Link Video</label></div>
+            <div class="form-check"><input class="form-check-input" type="radio" name="alasanTidakShare" id="ats2" value="noGadget"><label class="form-check-label" for="ats2">Tidak Ada Gadget</label></div>
+            <div class="form-check"><input class="form-check-input" type="radio" name="alasanTidakShare" id="ats3" value="noData"><label class="form-check-label" for="ats3">Tidak Ada Data</label></div>
+            <div class="form-check"><input class="form-check-input" type="radio" name="alasanTidakShare" id="ats4" value="noMedsos"><label class="form-check-label" for="ats4">Tidak Punya Medsos</label></div>
+            <div class="form-check"><input class="form-check-input" type="radio" name="alasanTidakShare" id="ats5" value="malas"><label class="form-check-label" for="ats5">Malas</label></div>
+            <div class="form-check"><input class="form-check-input" type="radio" name="alasanTidakShare" id="ats6" value="tidakMerrespons"><label class="form-check-label" for="ats6">Tidak Merespons</label></div>
+          </div>
+        </div>
+
+        <div class="mt-4 d-flex gap-2 flex-wrap">
+          <button type="submit" class="btn btn-primary">💾 Simpan Data</button>
+          <button type="button" class="btn btn-secondary" onclick="resetForm()">↺ Reset</button>
+          <span id="editInfo" class="text-muted small align-self-center"></span>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Section 2b: Import WA (ADMIN ONLY) -->
+  <div class="card import-card admin-only">
+    <div class="card-body">
+      <div class="section-title" style="color:#6f42c1">📥 Import dari Laporan WhatsApp</div>
+      <div class="row g-2">
+        <div class="col-md-9">
+          <textarea id="importInput" class="form-control" rows="4"
+            placeholder="Paste seluruh pesan WhatsApp yang mengandung blok [MULID:...] di sini."></textarea>
+          <small class="text-muted">Data duplikat (ID sama) akan otomatis dilewati saat import.</small>
+        </div>
+        <div class="col-md-3 d-flex flex-column gap-2">
+          <button class="btn btn-primary w-100" onclick="importFromWA()">📥 Import Data</button>
+          <button class="btn btn-outline-secondary w-100" onclick="document.getElementById('importInput').value=''">Bersihkan Kotak</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 3: Tabel (SELALU TAMPIL) -->
+  <div class="card">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+        <div class="section-title mb-0"><span class="admin-only">3. </span>Data Tersimpan</div>
+        <div class="d-flex gap-2 flex-wrap">
+          <button class="btn btn-primary btn-sm" onclick="sendViaWA()">📱 Kirim via WA</button>
+          <button class="btn btn-success btn-sm admin-only" onclick="exportExcel()">📊 Export Excel</button>
+          <button class="btn btn-outline-danger btn-sm admin-only" onclick="clearAllRecords()">🗑️ Hapus Semua Data</button>
+        </div>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-bordered table-sm table-hover" id="dataTable">
+          <thead class="table-light">
+            <tr>
+              <th>No</th><th>Nama</th><th>Status</th><th>Menonton</th><th>Durasi</th>
+              <th>Alasan Tidak Menonton</th><th>Share</th><th>Jml Kontakan</th><th>Jml Medsos</th>
+              <th>Alasan Tidak Share</th><th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const NAMES_KEY = 'maulid_names';
+const RECORDS_KEY = 'maulid_records';
+const WA_NUMBER = '6285730127862';
+const ADMIN_PASSWORD = 'admin123';
+
+const DURASI_LABEL = { '<1/2': '< 1/2 video', 'tdkSelesai': 'Tdk sesai tp lebih dr 1/2', 'selesai': 'Sampai Selesai' };
+const ALASAN_TM_LABEL = { tdkInfo: 'Tidak Dapat Info Link Video', noGadget: 'Tidak Ada Gadget/Data', kegiatan000: 'Ada Kegiatan 000 Lainnya', kegiatanPribadi: 'Ada Kegiatan Pribadi/Keluarga', bekerja: 'Bekerja', malas: 'Malas', tidakMerrespons: 'Tidak Merespons' };
+const ALASAN_TS_LABEL = { tdkInfo: 'Tidak Dapat Info Link Video', noGadget: 'Tidak Ada Gadget', noData: 'Tidak Ada Data', noMedsos: 'Tidak Punya Medsos', malas: 'Malas', tidakMerrespons: 'Tidak Merespons' };
+
+/* ===== STORAGE ===== */
+function loadNames() { try { return JSON.parse(localStorage.getItem(NAMES_KEY)) || []; } catch { return []; } }
+function saveNames(n) { localStorage.setItem(NAMES_KEY, JSON.stringify(n)); }
+function loadRecords() { try { return JSON.parse(localStorage.getItem(RECORDS_KEY)) || []; } catch { return []; } }
+function saveRecords(r) { localStorage.setItem(RECORDS_KEY, JSON.stringify(r)); }
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+
+/* ===== BASE64 ===== */
+function b64EncodeUnicode(str) { return btoa(unescape(encodeURIComponent(str))); }
+function b64DecodeUnicode(str) { return decodeURIComponent(escape(atob(str))); }
+
+/* ===== TOAST ===== */
+function showToast(message, type = 'success', duration = 3000) {
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = 'toast-notif' + (type !== 'success' ? ' ' + type : '');
+  const icon = type === 'success' ? '✅' : type === 'error' ? '❌' : type === 'warning' ? '⚠️' : 'ℹ️';
+  toast.innerHTML = `<span>${icon}</span><span>${escapeHtml(message)}</span>`;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.classList.add('fade-out');
+    setTimeout(() => toast.remove(), 300);
+  }, duration);
+}
+
+/* ===== MODE ===== */
+function isAdminMode() { return document.body.classList.contains('admin-mode'); }
+
+function toggleAdmin() {
+  if (isAdminMode()) {
+    // keluar dari admin: tidak perlu password
+    document.body.classList.remove('admin-mode');
+    document.getElementById('adminToggleLabel').textContent = '🔑 Admin';
+    document.getElementById('editId').value = '';
+    document.getElementById('editInfo').textContent = '';
+    showToast('Kembali ke mode biasa', 'info');
+    document.getElementById('namaInput').focus();
+  } else {
+    // masuk admin: butuh password
+    const pw = prompt('🔒 Masukkan password admin:');
+    if (pw === null) return; // user cancel
+    if (pw === ADMIN_PASSWORD) {
+      document.body.classList.add('admin-mode');
+      document.getElementById('adminToggleLabel').textContent = '👤 Mode Biasa';
+      showToast('Selamat datang, Admin', 'info');
+    } else {
+      showToast('Password salah!', 'error');
+    }
+  }
+}
+
+/* ===== NAMA ===== */
+function importNames() {
+  const text = document.getElementById('namesInput').value.trim();
+  if (!text) { showToast('Paste nama terlebih dahulu', 'warning'); return; }
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const existing = loadNames();
+  const merged = [...new Set([...existing, ...lines])];
+  const added = merged.length - existing.length;
+  saveNames(merged);
+  document.getElementById('namesInput').value = '';
+  renderNames(); renderNameOptions();
+  showToast(`${added} nama baru ditambahkan (total ${merged.length})`);
+}
+function clearNames() {
+  if (!confirm('Hapus semua nama?')) return;
+  saveNames([]); renderNames(); renderNameOptions();
+  showToast('Semua nama dihapus', 'info');
+}
+function deleteName(i) {
+  const names = loadNames(); const name = names[i]; names.splice(i, 1);
+  saveNames(names); renderNames(); renderNameOptions();
+  showToast(`Nama "${name}" dihapus`, 'info');
+}
+function renderNames() {
+  const names = loadNames();
+  const el = document.getElementById('namesList');
+  if (names.length === 0) {
+    el.innerHTML = '<div class="text-muted small">Belum ada nama. Paste daftar nama di atas lalu klik "Muat &amp; Simpan Nama".</div>';
+    return;
+  }
+  el.innerHTML = `<div class="small text-muted mb-2">${names.length} nama tersimpan (klik × untuk hapus):</div>` +
+    names.map((n, i) => `<span class="name-chip">${escapeHtml(n)}<button onclick="deleteName(${i})">&times;</button></span>`).join('');
+}
+function renderNameOptions() {
+  const names = loadNames();
+  document.getElementById('namaSelect').innerHTML = '<option value="">— Pilih Nama —</option>' +
+    names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+}
+
+/* ===== TOGGLE ===== */
+function toggleMenonton() {
+  const ya = document.getElementById('menontonYa').checked;
+  const tidak = document.getElementById('menontonTidak').checked;
+  document.getElementById('durasiSection').classList.toggle('hidden', !ya);
+  document.getElementById('alasanTidakMenontonSection').classList.toggle('hidden', !tidak);
+  if (!ya) document.querySelectorAll('input[name="durasi"]').forEach(r => r.checked = false);
+  if (!tidak) document.querySelectorAll('input[name="alasanTidakMenonton"]').forEach(r => r.checked = false);
+}
+function toggleShare() {
+  const ya = document.getElementById('shareYa').checked;
+  const tidak = document.getElementById('shareTidak').checked;
+  document.getElementById('shareYaSection').classList.toggle('hidden', !ya);
+  document.getElementById('shareTidakSection').classList.toggle('hidden', !tidak);
+  if (!ya) { document.getElementById('jumlahKontakan').value = ''; document.getElementById('jumlahMedsos').value = ''; }
+  if (!tidak) document.querySelectorAll('input[name="alasanTidakShare"]').forEach(r => r.checked = false);
+}
+
+/* ===== FORM ===== */
+function resetForm() {
+  document.getElementById('dataForm').reset();
+  document.getElementById('editId').value = '';
+  document.getElementById('editInfo').textContent = '';
+  toggleMenonton(); toggleShare();
+  if (!isAdminMode()) document.getElementById('namaInput').focus();
+}
+function getNama() {
+  return isAdminMode()
+    ? document.getElementById('namaSelect').value
+    : document.getElementById('namaInput').value.trim();
+}
+function saveRecord(e) {
+  e.preventDefault();
+  const editId = document.getElementById('editId').value;
+  const nama = getNama();
+  const status = document.querySelector('input[name="status"]:checked')?.value;
+  const menonton = document.querySelector('input[name="menonton"]:checked')?.value;
+  const share = document.querySelector('input[name="share"]:checked')?.value;
+
+  if (!nama) { showToast('Isi nama terlebih dahulu', 'warning'); return; }
+  if (!status) { showToast('Pilih status (K/P)', 'warning'); return; }
+  if (!menonton) { showToast('Pilih menonton Ya/Tidak', 'warning'); return; }
+  if (!share) { showToast('Pilih share Ya/Tidak', 'warning'); return; }
+
+  const rec = { id: editId || Date.now().toString() + Math.random().toString(36).slice(2, 6), nama, status, menonton: menonton === 'ya', share: share === 'ya' };
+
+  if (rec.menonton) {
+    const d = document.querySelector('input[name="durasi"]:checked')?.value;
+    if (!d) { showToast('Pilih durasi menonton', 'warning'); return; }
+    rec.durasi = d;
+  } else {
+    const a = document.querySelector('input[name="alasanTidakMenonton"]:checked')?.value;
+    if (!a) { showToast('Pilih alasan tidak menonton', 'warning'); return; }
+    rec.alasanTidakMenonton = a;
+  }
+
+  if (rec.share) {
+    rec.jumlahKontakan = parseInt(document.getElementById('jumlahKontakan').value) || 0;
+    rec.jumlahMedsos = parseInt(document.getElementById('jumlahMedsos').value) || 0;
+  } else {
+    const a = document.querySelector('input[name="alasanTidakShare"]:checked')?.value;
+    if (!a) { showToast('Pilih alasan tidak share', 'warning'); return; }
+    rec.alasanTidakShare = a;
+  }
+
+  const records = loadRecords();
+  const isEdit = !!editId;
+  if (editId) {
+    const idx = records.findIndex(r => r.id === editId);
+    if (idx >= 0) records[idx] = rec;
+  } else records.push(rec);
+  saveRecords(records);
+
+  if (isAdminMode()) {
+    resetForm();
+  } else {
+    document.getElementById('editId').value = '';
+    document.getElementById('namaInput').value = '';
+    document.getElementById('namaInput').focus();
+  }
+  renderTable(); updateCount();
+  showToast(isEdit ? `Data "${nama}" diperbarui` : `Data "${nama}" tersimpan`);
+}
+
+function editRecord(id) {
+  const rec = loadRecords().find(r => r.id === id); if (!rec) return;
+  document.getElementById('editId').value = rec.id;
+  document.getElementById('editInfo').textContent = `✏️ Sedang edit: ${rec.nama}`;
+  // set kedua elemen nama (dropdown admin & text normal)
+  document.getElementById('namaSelect').value = rec.nama;
+  document.getElementById('namaInput').value = rec.nama;
+  document.querySelector(`input[name="status"][value="${rec.status}"]`).checked = true;
+  document.querySelector(`input[name="menonton"][value="${rec.menonton ? 'ya' : 'tidak'}"]`).checked = true;
+  document.querySelector(`input[name="share"][value="${rec.share ? 'ya' : 'tidak'}"]`).checked = true;
+  toggleMenonton(); toggleShare();
+  if (rec.menonton && rec.durasi) document.querySelector(`input[name="durasi"][value="${rec.durasi}"]`).checked = true;
+  if (!rec.menonton && rec.alasanTidakMenonton) document.querySelector(`input[name="alasanTidakMenonton"][value="${rec.alasanTidakMenonton}"]`).checked = true;
+  if (rec.share) {
+    document.getElementById('jumlahKontakan').value = rec.jumlahKontakan || '';
+    document.getElementById('jumlahMedsos').value = rec.jumlahMedsos || '';
+  }
+  if (!rec.share && rec.alasanTidakShare) document.querySelector(`input[name="alasanTidakShare"][value="${rec.alasanTidakShare}"]`).checked = true;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  showToast(`Mengedit data "${rec.nama}"`, 'info');
+}
+function deleteRecord(id) {
+  const rec = loadRecords().find(r => r.id === id);
+  if (!confirm(`Hapus data "${rec?.nama || ''}"?`)) return;
+  saveRecords(loadRecords().filter(r => r.id !== id));
+  renderTable(); updateCount();
+  showToast(`Data "${rec?.nama || ''}" dihapus`, 'info');
+}
+function clearAllRecords() {
+  const n = loadRecords().length;
+  if (!confirm(`Hapus SEMUA (${n}) data kontakan?`)) return;
+  saveRecords([]); renderTable(); updateCount();
+  showToast(`Semua data (${n}) dihapus`, 'info');
+}
+
+/* ===== TABLE ===== */
+function renderTable() {
+  const records = loadRecords();
+  const tbody = document.getElementById('tableBody');
+  if (records.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted fst-italic">Belum ada data tersimpan.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = records.map((r, i) => `
+    <tr>
+      <td>${i + 1}</td>
+      <td>${escapeHtml(r.nama)}</td>
+      <td><span class="badge ${r.status === 'K' ? 'bg-primary' : 'bg-info text-dark'}">${r.status === 'K' ? 'Karyawan' : 'Pelajar'}</span></td>
+      <td>${r.menonton ? '✅ Ya' : '❌ Tidak'}</td>
+      <td>${r.menonton ? (DURASI_LABEL[r.durasi] || '-') : '-'}</td>
+      <td>${!r.menonton ? (ALASAN_TM_LABEL[r.alasanTidakMenonton] || '-') : '-'}</td>
+      <td>${r.share ? '✅ Ya' : '❌ Tidak'}</td>
+      <td>${r.share ? (r.jumlahKontakan ?? 0) : '-'}</td>
+      <td>${r.share ? (r.jumlahMedsos ?? 0) : '-'}</td>
+      <td>${!r.share ? (ALASAN_TS_LABEL[r.alasanTidakShare] || '-') : '-'}</td>
+      <td class="text-nowrap">
+        <button class="btn btn-sm btn-outline-primary" onclick="editRecord('${r.id}')" title="Edit">✏️</button>
+        <button class="btn btn-sm btn-outline-danger" onclick="deleteRecord('${r.id}')" title="Hapus">🗑️</button>
+      </td>
+    </tr>`).join('');
+}
+function updateCount() {
+  const n = loadRecords().length;
+  document.getElementById('countBadge').textContent = `${n} data`;
+}
+
+/* ===== KIRIM VIA WA ===== */
+function sendViaWA() {
+  const records = loadRecords();
+  if (records.length === 0) { showToast('Tidak ada data untuk dikirim', 'warning'); return; }
+
+  const encoded = b64EncodeUnicode(JSON.stringify(records));
+  const now = new Date();
+  const tgl = now.toLocaleDateString('id-ID', { day:'2-digit', month:'2-digit', year:'numeric' }) + ' ' +
+              now.toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' }).replace(':', '.');
+
+  let msg = `*LAPORAN SEBAR KONTEN - MAULID 1448 H*\n`;
+  msg += `_MARGOPADANG · BOJONEGORO RAYA_\n\n`;
+  msg += `Total: *${records.length} data*\n`;
+  msg += `Dibuat: ${tgl}\n\n`;
+  msg += `*Rincian:*\n`;
+  records.forEach((r, i) => {
+    let line = `${i+1}. *${r.nama}* (${r.status}) — `;
+    line += r.menonton ? `Nonton ✅ ${DURASI_LABEL[r.durasi]}` : `Nonton ❌ ${ALASAN_TM_LABEL[r.alasanTidakMenonton]}`;
+    line += ` | Share ${r.share ? `✅ ${r.jumlahKontakan || 0} kontak, ${r.jumlahMedsos || 0} medsos` : `❌ ${ALASAN_TS_LABEL[r.alasanTidakShare]}`}`;
+    msg += line + '\n';
+  });
+  msg += `\n━━━━━━━━━━━━━━━━━━━━\n`;
+  msg += `📥 *DATA UNTUK ADMIN*\n`;
+  msg += `_Copy seluruh pesan ini, lalu paste di halaman Admin_\n\n`;
+  msg += `[MULID:${encoded}]\n`;
+  msg += `━━━━━━━━━━━━━━━━━━━━`;
+
+  if (msg.length > 6000) {
+    if (!confirm(`Pesan cukup panjang (${msg.length} karakter). Mungkin gagal terkirim via WhatsApp.\n\nTetap lanjutkan?`)) return;
+  }
+
+  const url = `https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(msg)}`;
+  window.open(url, '_blank');
+  showToast(`Membuka WhatsApp untuk ${records.length} data`, 'info');
+
+  if (!isAdminMode()) {
+    setTimeout(() => {
+      if (confirm('Pesan sudah terkirim via WhatsApp?\n\nKlik OK untuk mengosongkan data lokal di perangkat ini.\nKlik Cancel untuk tetap menyimpan data lokal.')) {
+        saveRecords([]);
+        renderTable(); updateCount();
+        showToast('Data lokal dikosongkan', 'info');
+      }
+    }, 500);
+  }
+}
+
+/* ===== IMPORT FROM WA (ADMIN) ===== */
+function importFromWA() {
+  const text = document.getElementById('importInput').value.trim();
+  if (!text) { showToast('Paste pesan WhatsApp terlebih dahulu', 'warning'); return; }
+  const match = text.match(/\[MULID:([\s\S]+?)\]/);
+  if (!match) { showToast('Format pesan tidak valid — pastikan ada blok [MULID:...]', 'error'); return; }
+
+  let imported;
+  try {
+    const encoded = match[1].replace(/\s/g, '');
+    imported = JSON.parse(b64DecodeUnicode(encoded));
+  } catch (e) {
+    showToast('Gagal membaca data. Pesan mungkin terpotong.', 'error');
+    return;
+  }
+  if (!Array.isArray(imported) || imported.length === 0) { showToast('Tidak ada data di dalam pesan', 'warning'); return; }
+
+  const existing = loadRecords();
+  const existingIds = new Set(existing.map(r => r.id));
+  const newRecords = imported.filter(r => !existingIds.has(r.id));
+
+  if (newRecords.length === 0) {
+    showToast(`Semua ${imported.length} data sudah ada (duplikat dilewati)`, 'info');
+    return;
+  }
+
+  if (!confirm(`Ditemukan ${imported.length} data.\n${imported.length - newRecords.length} duplikat dilewati.\n\nTambahkan *${newRecords.length} data baru*?`)) return;
+
+  saveRecords([...existing, ...newRecords]);
+  document.getElementById('importInput').value = '';
+  renderTable(); updateCount();
+  showToast(`Berhasil import ${newRecords.length} data baru (total ${loadRecords().length})`);
+}
+
+/* ===== EXPORT EXCEL ===== */
+async function exportExcel() {
+  const records = loadRecords();
+  if (records.length === 0) { showToast('Tidak ada data untuk diexport', 'warning'); return; }
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Data Kontakan');
+  ws.columns = [
+    { width: 8 }, { width: 18 }, { width: 8 },
+    ...Array(6).fill({ width: 14 }),
+    ...Array(9).fill({ width: 13 }),
+    { width: 5 }, { width: 5 }, { width: 7 },
+    { width: 10 }, { width: 10 },
+    ...Array(8).fill({ width: 13 })
+  ];
+  ws.mergeCells('A1:AE1');
+  const titleCell = ws.getCell('A1');
+  titleCell.value = 'LAPORAN KEGIATAN PELIBATAN KONTAKAN-MAULID 1448 H';
+  titleCell.font = { bold: true, size: 14 };
+  titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  titleCell.border = { top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} };
+
+  const h3 = [
+    ['A3','NO.','A5'], ['B3','NAMA','B5'], ['C3','STATUS','C5'],
+    ['D3','MENONTON','I3'], ['J3','ALASAN TIDAK MENONTON','R3'],
+    ['S3','MELAKUKAN SHARE','U3'], ['V3','JUMLAH YANG DISHARE','W3'],
+    ['X3','ALASAN TIDAK MELAKUKAN SHARE','AE3'],
+  ];
+  h3.forEach(([cell, val, mergeTo]) => { ws.mergeCells(`${cell}:${mergeTo}`); ws.getCell(cell).value = val; });
+  const h4 = [
+    ['D4','K','F4'], ['G4','P','I4'],
+    ['J4','TDK DPT INFO LINK VIDEO','J5'], ['K4','TIDAK ADA GADGET/DATA','K5'],
+    ['L4','ADA KEGIATAN 000 LAINNYA','L5'], ['M4','ADA KEGIATAN PRIBADI/KELUARGA','M5'],
+    ['N4','BEKERJA','N5'], ['O4','MALAS','P4'], ['Q4','TIDAK MERESPON','R4'],
+    ['S4','K','S5'], ['T4','P','T5'], ['U4','JUMLAH','U5'],
+    ['V4','KONTAKAN','V5'], ['W4','JUMLAH MEDSOS','W5'],
+    ['X4','TDK DPT INFO LINK VIDEO','X5'], ['Y4','TIDAK ADA GADGET','Y5'],
+    ['Z4','TIDAK ADA DATA','Z5'], ['AA4','TIDAK PUNYA MEDSOS','AA5'],
+    ['AB4','MALAS','AC4'], ['AD4','TIDAK MERESPON','AE4'],
+  ];
+  h4.forEach(([cell, val, mergeTo]) => { ws.mergeCells(`${cell}:${mergeTo}`); ws.getCell(cell).value = val; });
+  const h5 = {
+    D5:'< 1/2 video', E5:'Tdk sesai tp lebih dr 1/2', F5:'Sampai Selesai',
+    G5:'< 1/2 video', H5:'Tdk sesai tp lebih dr 1/2', I5:'Sampai Selesai',
+    O5:'K', P5:'P', Q5:'K', R5:'P', AB5:'K', AC5:'P', AD5:'K', AE5:'P',
+  };
+  Object.entries(h5).forEach(([c, v]) => { ws.getCell(c).value = v; });
+
+  const hs = {
+    font: { bold: true, size: 9 },
+    alignment: { horizontal: 'center', vertical: 'middle', wrapText: true },
+    fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E1F2' } },
+    border: { top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} }
+  };
+  for (let r = 3; r <= 5; r++) for (let c = 1; c <= 31; c++) ws.getCell(r, c).style = hs;
+
+  const firstDataRow = 6;
+  records.forEach((rec, i) => {
+    const row = firstDataRow + i;
+    const data = Array(31).fill('');
+    data[0] = i + 1; data[1] = rec.nama; data[2] = rec.status;
+    if (rec.menonton) {
+      const mapK = { '<1/2':3, 'tdkSelesai':4, 'selesai':5 };
+      const mapP = { '<1/2':6, 'tdkSelesai':7, 'selesai':8 };
+      const map = rec.status === 'K' ? mapK : mapP;
+      if (map[rec.durasi] !== undefined) data[map[rec.durasi]] = 1;
+    } else {
+      const r = rec.alasanTidakMenonton;
+      if (r === 'malas') data[rec.status === 'K' ? 14 : 15] = 1;
+      else if (r === 'tidakMerrespons') data[rec.status === 'K' ? 16 : 17] = 1;
+      else { const map = { tdkInfo:9, noGadget:10, kegiatan000:11, kegiatanPribadi:12, bekerja:13 }; if (map[r] !== undefined) data[map[r]] = 1; }
+    }
+    if (rec.share) {
+      data[rec.status === 'K' ? 18 : 19] = 1; data[20] = 1;
+      data[21] = rec.jumlahKontakan || 0; data[22] = rec.jumlahMedsos || 0;
+    } else {
+      const r = rec.alasanTidakShare;
+      if (r === 'malas') data[rec.status === 'K' ? 27 : 28] = 1;
+      else if (r === 'tidakMerrespons') data[rec.status === 'K' ? 29 : 30] = 1;
+      else { const map = { tdkInfo:23, noGadget:24, noData:25, noMedsos:26 }; if (map[r] !== undefined) data[map[r]] = 1; }
+    }
+    const xlRow = ws.getRow(row);
+    data.forEach((v, idx) => {
+      const cell = xlRow.getCell(idx + 1);
+      cell.value = v;
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.border = { top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} };
+      cell.font = { size: 10 };
+    });
+  });
+
+  const lastDataRow = firstDataRow + records.length - 1;
+  const totalRow = lastDataRow + 1;
+  ws.mergeCells(`A${totalRow}:C${totalRow}`);
+  const lc = ws.getCell(`A${totalRow}`);
+  lc.value = 'JUMLAH';
+  lc.font = { bold: true, size: 10 };
+  lc.alignment = { horizontal: 'center', vertical: 'middle' };
+  lc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF2CC' } };
+  lc.border = { top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} };
+  for (let c = 4; c <= 31; c++) {
+    const colLetter = ws.getColumn(c).letter;
+    const cell = ws.getCell(totalRow, c);
+    cell.value = { formula: `SUM(${colLetter}${firstDataRow}:${colLetter}${lastDataRow})` };
+    cell.font = { bold: true, size: 10 };
+    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF2CC' } };
+    cell.border = { top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} };
+  }
+  ws.views = [{ state: 'frozen', ySplit: 5 }];
+
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `Laporan_Maulid_1448H_${new Date().toISOString().slice(0,10)}.xlsx`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  showToast(`Export ${records.length} data ke Excel`);
+}
+
+/* ===== INIT ===== */
+renderNames(); renderNameOptions(); renderTable(); updateCount();
+if (!isAdminMode()) document.getElementById('namaInput').focus();
+</script>
+</body>
+</html>
