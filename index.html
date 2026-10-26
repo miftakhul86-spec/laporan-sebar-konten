@@ -52,7 +52,7 @@
   <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <div>
       <h1 class="h4 mb-1">📋 Laporan Sebar Konten <span class="badge admin-badge admin-only">ADMIN</span></h1>
-      <div class="text-muted small">Maulid 1448 H · MARGOPADANG · BOJONEGORO RAYA</div>
+      <div class="text-muted small">MARGOPADANG · BOJONEGORO RAYA</div>
     </div>
     <div class="d-flex gap-2 align-items-center">
       <span class="badge bg-primary fs-6" id="countBadge">0 data</span>
@@ -134,7 +134,7 @@
           <label class="form-label fw-bold">Durasi Menonton</label>
           <div class="durasi-grid">
             <div class="form-check"><input class="form-check-input" type="radio" name="durasi" id="d1" value="<1/2"><label class="form-check-label" for="d1">&lt; 1/2 video</label></div>
-            <div class="form-check"><input class="form-check-input" type="radio" name="durasi" id="d2" value="tdkSelesai"><label class="form-check-label" for="d2">Tdk sesai tp lebih dr 1/2</label></div>
+            <div class="form-check"><input class="form-check-input" type="radio" name="durasi" id="d2" value="tdkSelesai"><label class="form-check-label" for="d2">Tdk selesai tp lebih dr 1/2</label></div>
             <div class="form-check"><input class="form-check-input" type="radio" name="durasi" id="d3" value="selesai"><label class="form-check-label" for="d3">Sampai Selesai</label></div>
           </div>
         </div>
@@ -253,7 +253,7 @@ const RECORDS_KEY = 'maulid_records';
 const WA_NUMBER = '6285730127862';
 const ADMIN_PASSWORD = 'admin123';
 
-const DURASI_LABEL = { '<1/2': '< 1/2 video', 'tdkSelesai': 'Tdk sesai tp lebih dr 1/2', 'selesai': 'Sampai Selesai' };
+const DURASI_LABEL = { '<1/2': '< 1/2 video', 'tdkSelesai': 'Tdk selesai tp lebih dr 1/2', 'selesai': 'Sampai Selesai' };
 const ALASAN_TM_LABEL = { tdkInfo: 'Tidak Dapat Info Link Video', noGadget: 'Tidak Ada Gadget/Data', kegiatan000: 'Ada Kegiatan 000 Lainnya', kegiatanPribadi: 'Ada Kegiatan Pribadi/Keluarga', bekerja: 'Bekerja', malas: 'Malas', tidakMerrespons: 'Tidak Merespons' };
 const ALASAN_TS_LABEL = { tdkInfo: 'Tidak Dapat Info Link Video', noGadget: 'Tidak Ada Gadget', noData: 'Tidak Ada Data', noMedsos: 'Tidak Punya Medsos', malas: 'Malas', tidakMerrespons: 'Tidak Merespons' };
 
@@ -507,7 +507,7 @@ function sendViaWA() {
   const tgl = now.toLocaleDateString('id-ID', { day:'2-digit', month:'2-digit', year:'numeric' }) + ' ' +
               now.toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' }).replace(':', '.');
 
-  let msg = `*LAPORAN SEBAR KONTEN - MAULID 1448 H*\n`;
+  let msg = `*LAPORAN SEBAR KONTEN*\n`;
   msg += `_MARGOPADANG · BOJONEGORO RAYA_\n\n`;
   msg += `Total: *${records.length} data*\n`;
   msg += `Dibuat: ${tgl}\n\n`;
@@ -593,7 +593,7 @@ async function exportExcel() {
   ];
   ws.mergeCells('A1:AE1');
   const titleCell = ws.getCell('A1');
-  titleCell.value = 'LAPORAN KEGIATAN PELIBATAN KONTAKAN-MAULID 1448 H';
+  titleCell.value = 'LAPORAN KEGIATAN SEBAR KONTEN DAKWAH';
   titleCell.font = { bold: true, size: 14 };
   titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
   titleCell.border = { top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} };
@@ -618,8 +618,8 @@ async function exportExcel() {
   ];
   h4.forEach(([cell, val, mergeTo]) => { ws.mergeCells(`${cell}:${mergeTo}`); ws.getCell(cell).value = val; });
   const h5 = {
-    D5:'< 1/2 video', E5:'Tdk sesai tp lebih dr 1/2', F5:'Sampai Selesai',
-    G5:'< 1/2 video', H5:'Tdk sesai tp lebih dr 1/2', I5:'Sampai Selesai',
+    D5:'< 1/2 video', E5:'Tdk selesai tp lebih dr 1/2', F5:'Sampai Selesai',
+    G5:'< 1/2 video', H5:'Tdk selesai tp lebih dr 1/2', I5:'Sampai Selesai',
     O5:'K', P5:'P', Q5:'K', R5:'P', AB5:'K', AC5:'P', AD5:'K', AE5:'P',
   };
   Object.entries(h5).forEach(([c, v]) => { ws.getCell(c).value = v; });
@@ -692,7 +692,7 @@ async function exportExcel() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `Laporan_Maulid_1448H_${new Date().toISOString().slice(0,10)}.xlsx`;
+  a.download = `Laporan_Sebar_Konten_${new Date().toISOString().slice(0,10)}.xlsx`;
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
   showToast(`Export ${records.length} data ke Excel`);
